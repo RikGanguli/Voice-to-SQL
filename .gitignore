@@ -1,0 +1,16 @@
+# Node modules
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+
+# Build folders
+build/
+dist/
+
+# IDE files
+.vscode/
