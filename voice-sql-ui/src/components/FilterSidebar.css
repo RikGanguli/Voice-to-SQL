@@ -1,0 +1,117 @@
+.filter-sidebar {
+  width: 280px;
+  padding: 30px;
+  background-color: #f9fafb;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.filter-sidebar h2 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #111827;
+  text-align: center;
+}
+
+.filter-section {
+  margin-bottom: 25px;
+}
+
+.filter-section h3 {
+  font-size: 1rem;
+  margin-bottom: 10px;
+  color: #374151;
+}
+
+.filter-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.filter-section input[type="text"],
+.filter-section input[type="number"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-top: 5px;
+}
+
+.apply-filters-btn {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(to right, #6366f1, #0ea5e9);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.apply-filters-btn:hover {
+  background: linear-gradient(to right, #4f46e5, #0284c7);
+}
+
+.submit-query-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.submit-query-btn:hover {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+}
+
+.apply-filters-btn {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.apply-filters-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.filter-section.effective-date label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.filter-section.effective-date label input[type="date"] {
+  width: 100%;
+  max-width: 180px;  /* Both inputs same width */
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+/* Specific tweak for the 'To:' line (second label) */
+.filter-section.effective-date label:nth-of-type(2) input[type="date"] {
+  margin-left: 1rem;  /* Adds more gap between 'To:' and its box */
+}
+

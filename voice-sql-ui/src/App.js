@@ -1,20 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import FilterSidebar from './components/FilterSidebar';
+import Footer from './components/Footer';
 import './App.css';
 
 const KPICards = () => {
-  const kpis = [
-    { label: 'Total Active Policies', value: '125,000' },
-    { label: 'Claims in Progress', value: '850' },
-    { label: 'Claim Settlement Ratio', value: '94.2%' },
-    { label: 'Avg Claim Processing Time', value: '12 days' },
-    { label: 'Policy Lapse Rate', value: '8.5%' },
-    { label: 'Customer Satisfaction', value: '89%' },
+  const [kpis, setKpis] = useState(null);
+
+  useEffect(() => {
+    const fetchKPIs = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/kpis');
+        setKpis(response.data);
+      } catch (error) {
+        console.error("Failed to fetch KPIs:", error);
+      }
+    };
+
+    fetchKPIs();
+  }, []);
+
+  if (!kpis) return <p>Loading KPIs...</p>;
+
+  const kpiItems = [
+    { label: 'Total Policies', value: kpis.totalPolicies },
+    { label: 'Total Gross Premium', value: kpis.totalGrossPremium },
+    { label: 'Average Policy Limit', value: kpis.avgPolicyLimit },
+    { label: 'Policies Issued This Month', value: kpis.policiesThisMonth },
+    { label: 'Most Common Transaction Type', value: kpis.commonTransactionType },
+    { label: 'Top Insured State', value: kpis.topInsuredState },
   ];
 
   return (
     <div className="kpi-container">
-      {kpis.map((kpi, index) => (
+      {kpiItems.map((kpi, index) => (
         <div key={index} className="kpi-card">
           <h2>{kpi.value}</h2>
           <p>{kpi.label}</p>
@@ -24,13 +43,31 @@ const KPICards = () => {
   );
 };
 
+
+
 const App = () => {
   const [transcript, setTranscript] = useState('');
-  const [result, setResult] = useState([]);
   const [sql, setSql] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
+
+  const [filters, setFilters] = useState({
+    manualQuery: '',
+    effectiveFrom: '',
+    effectiveTo: '',
+    transactionType: '',
+    insuredState: '',
+    coverage: '',
+    // agentName: '',
+    limitMin: '',
+    limitMax: '',
+    premiumMin: '',
+    premiumMax: ''
+  });
+
+  const [manualQueryResults, setManualQueryResults] = useState([]);
+  const [filterResults, setFilterResults] = useState([]);
 
   const recognitionRef = useRef(null);
 
@@ -45,7 +82,7 @@ const App = () => {
     recognition.onresult = (event) => {
       const speechText = event.results[event.results.length - 1][0].transcript;
       setTranscript(speechText);
-      fetchQueryResult(speechText);
+      handleManualQuerySubmit(speechText);
     };
 
     recognition.onerror = (event) => {
@@ -85,8 +122,8 @@ const App = () => {
       setStopRequested(false);
       setListening(true);
       setTranscript('');
-      setResult([]);
       setSql('');
+      setManualQueryResults([]);
 
       try {
         recognitionRef.current.start();
@@ -98,16 +135,45 @@ const App = () => {
     }
   };
 
-  const fetchQueryResult = async (question) => {
+  const handleManualQuerySubmit = async (query = filters.manualQuery) => {
+    if (query.trim() === '') return;
+
+    setFilterResults([]);  // ⬅️ Clear Filter Results
+
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/ask', { question });
+      const response = await axios.post('http://localhost:5000/ask', { question: query });
       const data = response.data;
       setSql(data.sql || '');
-      setResult(data.result || []);
+      setManualQueryResults(data.result || []);
     } catch (error) {
       console.error(error);
-      setResult([]);
+      setManualQueryResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApplyFilters = async (currentFilters) => {
+    console.log('Applying structured filters:', currentFilters);
+    const cleanedFilters = {};
+    for (const key in currentFilters) {
+      if (currentFilters[key] !== '') {
+        cleanedFilters[key] = currentFilters[key];
+      }
+    }
+
+    setManualQueryResults([]);  // ⬅️ Clear Manual Query Results
+
+    setLoading(true);
+    try {
+      const response = await axios.post('http://localhost:5000/filters', currentFilters);
+      const data = response.data;
+      setSql(data.sql || '');
+      setFilterResults(data.result || []);
+    } catch (error) {
+      console.error(error);
+      setFilterResults([]);
     } finally {
       setLoading(false);
     }
@@ -117,82 +183,125 @@ const App = () => {
     typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val);
 
   const formatDate = (val) => {
-    const date = new Date(val);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit'
-    });
+    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+      // Just extract the YYYY-MM-DD part
+      return val.slice(0, 10);
+    }
+
+    // If somehow not matching, return raw value
+    return val;
   };
 
+
+
   return (
-    <div className="app-container">
-      <header className="header">
-        <img src="/coaction-logo.jpg" alt="Coaction Specialty" className="logo" />
-        <h1 className="header-title">Policy Insights</h1>
-      </header>
+    <>
+    <div className="app-layout">
+      <main className="main-content">
+        <header className="header">
+          <img src="/coaction-logo.jpg" alt="Coaction Specialty" className="logo" />
+          <h1 className="header-title">Policy Insights</h1>
+        </header>
 
-      <KPICards />
+        <KPICards />
 
-      <section className="voice-section">
-        <h2>Talk to your data</h2>
-        <button
-          className={`listen-button ${listening ? 'listening' : ''}`}
-          onClick={toggleListening}
-        >
-          {listening ? '🛑 Stop Listening' : '🎤 Start Listening'}
-        </button>
-        <p className="subtitle">Ask questions about policies, claims, or trends</p>
-      </section>
+        <section className="voice-section">
+          <div className="voice-content">
+            <h2 className="gradient-text">Talk to your data</h2>
+            <button
+              className={`listen-button ${listening ? 'listening' : ''}`}
+              onClick={toggleListening}
+            >
+              {listening ? '🛑 Stop Listening' : '🎤 Ask a Query'}
+            </button>
+            <p className="subtitle">Ask questions about policies, claims, or trends</p>
+          </div>
+        </section>
 
-      {transcript && (
-        <div className="transcript">
-          <p><strong>You said:</strong> {transcript}</p>
-        </div>
-      )}
+        {transcript && (
+          <div className="transcript">
+            <p><strong>You said:</strong> {transcript}</p>
+          </div>
+        )}
 
-      {sql && (
-        <div className="sql-box">
-          <strong>Generated SQL:</strong>
-          <div><code>{sql}</code></div>
-        </div>
-      )}
+        {sql && (
+          <div className="sql-box">
+            <strong>Generated SQL:</strong>
+            <div><code>{sql}</code></div>
+          </div>
+        )}
 
-      {loading && <div className="loader"></div>}
+        {loading && <div className="loader"></div>}
 
-      {result.length > 0 && (
-        <table className="result-table">
-          <thead>
-            <tr>
-              {Object.keys(result[0]).map((key) => <th key={key}>{key}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {result.map((row, i) => (
-              <tr key={i}>
-                {Object.values(row).map((val, j) => (
-                  <td key={j}>
-                    {typeof val === 'number'
-                      ? val.toLocaleString('en-US')
-                      : (typeof val === 'string' && val.includes('GMT'))
-                        ? new Date(val).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: '2-digit'
-                          })
-                        : isISODate(val)
-                          ? formatDate(val)
-                          : val}
-                  </td>
+        {manualQueryResults.length > 0 && (
+          <div>
+            <h2 className="results-heading">Manual Query Results</h2>
+            <table className="result-table">
+              <thead>
+                <tr>
+                  {Object.keys(manualQueryResults[0]).map((key) => <th key={key}>{key}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {manualQueryResults.map((row, i) => (
+                  <tr key={i}>
+                    {Object.values(row).map((val, j) => (
+                      <td key={j}>
+                        {typeof val === 'number'
+                          ? val.toLocaleString('en-US')
+                          : (typeof val === 'string' && val.includes('T'))
+                            ? val.slice(0, 10)
+                            : val}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {filterResults.length > 0 && (
+          <div>
+            <h2 className="results-heading">Filtered Query Results</h2>
+            <table className="result-table">
+              <thead>
+                <tr>
+                  {Object.keys(filterResults[0]).map((key) => <th key={key}>{key}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {filterResults.map((row, i) => (
+                  <tr key={i}>
+                    {Object.values(row).map((val, j) => (
+                      <td key={j}>
+                        {typeof val === 'number'
+                          ? val.toLocaleString('en-US')
+                          : (typeof val === 'string' && val.includes('T'))
+                            ? val.slice(0, 10)
+                            : val}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
+
+      <FilterSidebar
+        filters={filters}
+        onChange={(name, value) => setFilters(prev => ({ ...prev, [name]: value }))}
+        onApplyFilters={() => handleApplyFilters(filters)}
+        onManualQuerySubmit={() => handleManualQuerySubmit()}
+      />
     </div>
+    <div>
+      <Footer/>
+    </div>
+    </>
+    
   );
 };
 

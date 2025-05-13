@@ -5,7 +5,7 @@ import psycopg2
 import os
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -126,9 +126,6 @@ def replace_month_names(question):
     return question
 
 
-
-
-
 # Final preprocessor combining both
 def preprocess_question(question):
     question = replace_month_names(question)
@@ -149,7 +146,6 @@ The table is called 'insurance_policies' and has the following columns:
 - coverage (TEXT)
 - limit (NUMERIC)
 - gross_premium (NUMERIC)
-- agent_name (TEXT; the name of the insurance agent)
 
 Use proper PostgreSQL syntax and avoid line breaks or comments.
 
@@ -210,13 +206,194 @@ def ask():
         cur.execute(sql)
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description]
-        result = [dict(zip(columns, row)) for row in rows]
+        result = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+
+            # ✅ Safe check if effective_date exists and is not None
+            if 'effective_date' in row_dict and isinstance(row_dict['effective_date'], (datetime, date)):
+                if row_dict['effective_date'] is not None:
+                    row_dict['effective_date'] = row_dict['effective_date'].strftime('%Y-%m-%d')
+
+            result.append(row_dict)
         cur.close()
         conn.close()
     except Exception as e:
         return jsonify({"error": "PostgreSQL query failed", "sql": sql, "details": str(e)}), 500
 
     return jsonify({"sql": sql, "result": result})
+
+@app.route("/filters", methods=["POST"])
+def filters():
+    filters_data = request.json
+
+    if not filters_data:
+        return jsonify({"error": "Missing filters in request body"}), 400
+
+    conditions = []
+    values = []
+
+    if filters_data.get('effectiveFrom'):
+        conditions.append("CAST(effective_date AS DATE) >= %s")
+        values.append(filters_data['effectiveFrom'])
+
+    if filters_data.get('effectiveTo'):
+        conditions.append("CAST(effective_date AS DATE) <= %s")
+        values.append(filters_data['effectiveTo'])
+
+    if filters_data.get('transactionType'):
+        conditions.append("transaction_type = %s")
+        values.append(filters_data['transactionType'])
+
+    if filters_data.get('insuredState'):
+        conditions.append("insured_state = %s")
+        values.append(filters_data['insuredState'])
+
+    if filters_data.get('coverage'):
+        conditions.append("coverage = %s")
+        values.append(filters_data['coverage'])
+
+    try:
+        # Handle limit range
+        limit_min_raw = filters_data.get('limitMin')
+        limit_max_raw = filters_data.get('limitMax')
+
+        if limit_min_raw != '' and limit_max_raw != '':
+            conditions.append('"limit" BETWEEN %s AND %s')
+            values.extend([float(limit_min_raw), float(limit_max_raw)])
+        elif limit_min_raw != '':
+            conditions.append('"limit" >= %s')
+            values.append(float(limit_min_raw))
+        elif limit_max_raw != '':
+            conditions.append('"limit" <= %s')
+            values.append(float(limit_max_raw))
+
+        # Handle gross_premium range
+        premium_min_raw = filters_data.get('premiumMin')
+        premium_max_raw = filters_data.get('premiumMax')
+
+        if premium_min_raw != '' and premium_max_raw != '':
+            conditions.append('gross_premium BETWEEN %s AND %s')
+            values.extend([float(premium_min_raw), float(premium_max_raw)])
+        elif premium_min_raw != '':
+            conditions.append('gross_premium >= %s')
+            values.append(float(premium_min_raw))
+        elif premium_max_raw != '':
+            conditions.append('gross_premium <= %s')
+            values.append(float(premium_max_raw))
+
+    except ValueError as e:
+        return jsonify({"error": "Invalid numeric filter values", "details": str(e)}), 400
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    # ✅ ✅ FIXED: Use f-string for SQL interpolation
+    sql = f"""
+        SELECT
+        policy_number,
+        effective_date,
+        transaction_type,
+        insured_state,
+        coverage,
+        "limit",
+        gross_premium
+    FROM insurance_policies
+    {where_clause}
+    LIMIT 100;
+
+    """
+
+    print("Generated SQL:", sql)
+    print("With values:", values)
+
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+        cur.execute(sql, values)
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        result = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+
+            # ✅ Safe check if effective_date exists and is not None
+            if 'effective_date' in row_dict and isinstance(row_dict['effective_date'], (datetime, date)):
+                if row_dict['effective_date'] is not None:
+                    row_dict['effective_date'] = row_dict['effective_date'].strftime('%Y-%m-%d')
+
+            result.append(row_dict)
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print("SQL Error:", str(e))
+        return jsonify({"error": "PostgreSQL query failed", "sql": sql, "details": str(e)}), 500
+
+    return jsonify({"sql": sql, "result": result})
+
+
+@app.route("/kpis", methods=["GET"])
+def get_kpis():
+    try:
+        conn = get_pg_connection()
+        cur = conn.cursor()
+
+        # 1. Total Policies
+        cur.execute("SELECT COUNT(*) FROM insurance_policies;")
+        total_policies = cur.fetchone()[0]
+
+        # 2. Total Gross Premium
+        cur.execute("SELECT COALESCE(ROUND(SUM(gross_premium), 2), 0) FROM insurance_policies;")
+        total_gross_premium = cur.fetchone()[0]
+
+        # 3. Average Policy Limit
+        cur.execute('SELECT COALESCE(ROUND(AVG("limit"), 2), 0) FROM insurance_policies;')
+        avg_policy_limit = cur.fetchone()[0]
+
+        # 4. Policies Issued This Month
+        cur.execute("""
+            SELECT COUNT(*) FROM insurance_policies 
+            WHERE DATE_TRUNC('month', effective_date) = DATE_TRUNC('month', CURRENT_DATE);
+        """)
+        policies_this_month = cur.fetchone()[0]
+
+        # 5. Most Common Transaction Type
+        cur.execute("""
+            SELECT transaction_type FROM insurance_policies 
+            GROUP BY transaction_type 
+            ORDER BY COUNT(*) DESC 
+            LIMIT 1;
+        """)
+        common_transaction_type = cur.fetchone()[0]
+
+        # 6. Top Insured State
+        cur.execute("""
+            SELECT insured_state FROM insurance_policies 
+            GROUP BY insured_state 
+            ORDER BY COUNT(*) DESC 
+            LIMIT 1;
+        """)
+        top_insured_state = cur.fetchone()[0]
+
+        cur.close()
+        conn.close()
+
+        # Return KPI data
+        return jsonify({
+            "totalPolicies": total_policies,
+            "totalGrossPremium": f"${total_gross_premium:,.2f}",
+            "avgPolicyLimit": f"${avg_policy_limit:,.2f}",
+            "policiesThisMonth": policies_this_month,
+            "commonTransactionType": common_transaction_type,
+            "topInsuredState": top_insured_state
+        })
+
+    except Exception as e:
+        print("KPI Query Error:", str(e))
+        return jsonify({"error": "Failed to fetch KPIs", "details": str(e)}), 500
+
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
