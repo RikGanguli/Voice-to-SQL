@@ -47,7 +47,6 @@ const App = () => {
   const [sql, setSql] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  const [stopRequested, setStopRequested] = useState(false);
 
   const [filters, setFilters] = useState({
     manualQuery: '',
@@ -68,6 +67,8 @@ const App = () => {
   const [filterAttempted, setFilterAttempted] = useState(false);
 
   const recognitionRef = useRef(null);
+  const stopRequestedRef = useRef(false);
+  const listeningRef = useRef(false); // ✅ New ref to track listening state
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -87,38 +88,46 @@ const App = () => {
       if (event.error === 'aborted') return;
       console.error("Speech recognition error:", event.error);
       setListening(false);
+      listeningRef.current = false;
     };
 
     recognition.onend = () => {
-      if (stopRequested) {
-        setStopRequested(false);
+      if (stopRequestedRef.current) {
+        stopRequestedRef.current = false;
+        console.log("Stopped listening on user request.");
         return;
       }
-      if (listening) {
-        try { recognition.start(); } catch (error) {
+      if (listeningRef.current) {  // ✅ Use ref to check active listening
+        try {
+          recognition.start();
+          console.log("Restarting recognition...");
+        } catch (error) {
           if (error.name !== 'InvalidStateError') console.error("Failed to restart recognition:", error);
         }
       }
     };
 
     recognitionRef.current = recognition;
-  }, [listening, stopRequested]);
+  }, []);
 
   const toggleListening = () => {
     if (!recognitionRef.current) return;
 
     if (listening) {
-      setStopRequested(true);
+      stopRequestedRef.current = true;
+      listeningRef.current = false; // ✅ Update ref when stopping
       setListening(false);
       recognitionRef.current.stop();
     } else {
-      setStopRequested(false);
+      stopRequestedRef.current = false;
+      listeningRef.current = true;  // ✅ Update ref when starting
       setListening(true);
       setTranscript('');
       setSql('');
       setManualQueryResults([]);
-      try { recognitionRef.current.start(); }
-      catch (error) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
         if (error.name !== 'InvalidStateError') console.error("Failed to start recognition:", error);
       }
     }
@@ -197,7 +206,6 @@ const App = () => {
           {sql && <div className="sql-box"><strong>Generated SQL:</strong><div><code>{sql}</code></div></div>}
           {loading && <div className="loader"></div>}
 
-          {/* Manual Query Results */}
           {manualQueryAttempted && !loading && (
             <div>
               <h2 className="results-heading">Manual Query Results</h2>
@@ -230,8 +238,6 @@ const App = () => {
             </div>
           )}
 
-
-          {/* Filter Results */}
           {filterAttempted && !loading && (
             <div>
               <h2 className="results-heading">Filtered Query Results</h2>
