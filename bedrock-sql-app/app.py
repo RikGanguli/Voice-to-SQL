@@ -7,6 +7,9 @@ import json
 import re
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
 
@@ -144,10 +147,20 @@ The table is called 'insurance_policies' and has the following columns:
 - transaction_type (TEXT; e.g. New Business, Endorsement)
 - insured_state (TEXT; two-letter US state abbreviation)
 - coverage (TEXT)
-- limit (NUMERIC)
-- gross_premium (NUMERIC)
+- limit (NUMERIC; represents the coverage limit in dollars)
+- gross_premium (NUMERIC; represents the total premium in dollars)
+
+When interpreting phrases like 'above 100000' or 'greater than 1000', apply the correct SQL numeric comparison operators (e.g., '>' for above, '<' for below).
+
+When filtering text columns like 'coverage' or 'insured_state', use case-insensitive comparison (e.g., ILIKE instead of =).
+
+Ensure you generate valid SQL for numeric fields like 'limit' and 'gross_premium'.
 
 Use proper PostgreSQL syntax and avoid line breaks or comments.
+
+If the question mentions "no filter" for a column, do not add any WHERE clause for that column.
+
+When the question asks for records "from" a date, generate a condition like "effective_date >= 'YYYY-MM-DD'" to include all records from that date onwards.
 
 Question: {user_question}
 Assistant:
@@ -162,14 +175,19 @@ def ask():
     data = request.json
     question = data.get("question")
 
+    print(f"[Incoming Request] Question: {question}")
+
     if not question:
+        print("[Error] Missing 'question' in request body")
         return jsonify({"error": "Missing 'question' in request body"}), 400
 
     # Step 0: Preprocess relative date phrases
     question = preprocess_question(question)
+    print(f"[Preprocessed Question] {question}")
 
     # Step 1: Build Claude prompt
     prompt = build_prompt(question)
+    print(f"[Claude Prompt]\n{prompt}")
 
     # Step 2: Invoke Claude API to get SQL
     try:
@@ -180,6 +198,8 @@ def ask():
             "stop_sequences": ["\n\nHuman:"]
         })
 
+        print(f"[Claude API Request Body]\n{body}")
+
         response = bedrock.invoke_model(
             modelId='anthropic.claude-v2',
             contentType='application/json',
@@ -188,19 +208,57 @@ def ask():
         )
 
         response_body = response['body'].read().decode('utf-8')
+        print(f"[Claude Raw Response Body]\n{response_body}")
 
         sql_start = response_body.lower().find("select")
         if sql_start == -1:
+            print(f"[Error] No SQL query found in Claude response.\nResponse Body: {response_body}")
             raise ValueError("No SQL query found in response.")
 
         sql_section = response_body[sql_start:]
         sql_only = re.split(r'[\"`\n]*stop_reason', sql_section)[0].strip()
         sql = sql_only.replace('\\n', ' ').replace('\\t', ' ').strip('",` ')
+        # Quote reserved keywords like 'limit'
+        # Smart replacement of limit used as a column (no lookbehind)
+        sql = re.sub(
+            r'\b(SELECT|WHERE|AND|OR|ON|BY)\s+(limit)\b',
+            lambda m: f"{m.group(1)} \"{m.group(2)}\"",
+            sql,
+            flags=re.IGNORECASE
+        )
+
+
+        # Normalize spaces in SQL to prevent matching issues
+        sql_clean = re.sub(r'\s+', ' ', sql).strip()
+
+        # Debug print original SQL
+        print(f"[Original Generated SQL]\n{sql_clean}")
+
+        # Apply FROM/SINCE patch if needed
+        if re.search(r'\b(from|since)\s+\w+\s+\d{4}\b', question, re.IGNORECASE):
+            sql_clean = re.sub(
+                r"effective_date\s+(BETWEEN|>=)\s+'(\d{4}-\d{2}-\d{2})'\s+AND\s+effective_date\s+<=\s+'(\d{4}-\d{2}-\d{2})'",
+                r"effective_date >= '\2'",
+                sql_clean,
+                flags=re.IGNORECASE
+            )
+            print(f"[Post-processed SQL after FROM/SINCE adjustment]\n{sql_clean}")
+        else:
+            print("[No FROM/SINCE adjustment applied. Original SQL is correct.]")
+
+        # Replace the cleaned SQL back into sql for execution
+        sql = sql_clean
+        print(f"[Generated SQL]\n{sql}")
+
     except Exception as e:
+        print(f"[Claude API Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "Claude API failed", "details": str(e)}), 500
 
     # Step 3: Execute SQL on PostgreSQL
     try:
+        print(f"[Executing SQL]\n{sql}")
         conn = get_pg_connection()
         cur = conn.cursor()
         cur.execute(sql)
@@ -216,12 +274,19 @@ def ask():
                     row_dict['effective_date'] = row_dict['effective_date'].strftime('%Y-%m-%d')
 
             result.append(row_dict)
+
+        print(f"[SQL Query Result] Rows Fetched: {len(result)}")
         cur.close()
         conn.close()
+
     except Exception as e:
+        print(f"[PostgreSQL Execution Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "PostgreSQL query failed", "sql": sql, "details": str(e)}), 500
 
     return jsonify({"sql": sql, "result": result})
+
 
 @app.route("/filters", methods=["POST"])
 def filters():

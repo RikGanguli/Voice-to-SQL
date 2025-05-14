@@ -110,12 +110,12 @@ body {
 
 .listen-button {
   margin-top: 1rem;
-  padding: 1rem 4rem;
+  padding: 0.6rem 2rem;
   border-radius: 14px; /* <-- Square with soft rounded corners */
   background: linear-gradient(to right, #a855f7, #6366f1);
   color: white;
   border: none;
-  font-size: 1.8rem;
+  font-size: 2rem;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
