@@ -155,23 +155,32 @@ const App = () => {
   };
 
   const handleApplyFilters = async (currentFilters) => {
-    setFilterAttempted(true);
-    setManualQueryAttempted(false);
-    setManualQueryResults([]);
-    setLoading(true);
+  // ✅ Prevent triggering with empty filters
+  const isFilterApplied = Object.values(currentFilters).some(value => value !== '' && value !== null && value !== undefined);
 
-    try {
-      const response = await axios.post('http://localhost:5000/filters', currentFilters);
-      const data = response.data;
-      setSql(data.sql || '');
-      setFilterResults(data.result || []);
-    } catch (error) {
-      console.error(error);
-      setFilterResults([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!isFilterApplied) {
+    console.log('No filters selected, ignoring apply.');
+    return;
+  }
+
+  setFilterAttempted(true);
+  setManualQueryAttempted(false);
+  setManualQueryResults([]);
+  setLoading(true);
+
+  try {
+    const response = await axios.post('http://localhost:5000/filters', currentFilters);
+    const data = response.data;
+    setSql(data.sql || '');
+    setFilterResults(data.result || []);
+  } catch (error) {
+    console.error(error);
+    setFilterResults([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const manualQueryColumns = manualQueryResults.length > 0
     ? Object.keys(manualQueryResults[0])
@@ -180,6 +189,27 @@ const App = () => {
   const filterResultsColumns = filterResults.length > 0
     ? Object.keys(filterResults[0])
     : ["policy_number", "effective_date", "transaction_type", "insured_state", "coverage", "limit", "gross_premium"];
+
+    const columnOrder = [
+      'policy_number',
+      'effective_date',
+      'transaction_type',
+      'insured_state',
+      'coverage',
+      'limit',
+      'gross_premium'
+    ];
+
+    const columnDisplayNames = {
+      policy_number: 'Policy Number',
+      effective_date: 'Effective Date',
+      transaction_type: 'Transaction Type',
+      insured_state: 'Insured State',
+      coverage: 'Coverage',
+      limit: 'Policy Limit ($)',
+      gross_premium: 'Gross Premium ($)'
+    };
+
 
   return (
     <>
@@ -194,72 +224,93 @@ const App = () => {
 
           <section className="voice-section">
             <div className="voice-content">
-              <h2 className="gradient-text">Talk to your data</h2>
+              {/* <h2 className="gradient-text">Talk to your data</h2> */}
               <button className={`listen-button ${listening ? 'listening' : ''}`} onClick={toggleListening}>
-                {listening ? '🛑 Stop Listening' : '🎤 Ask a Query'}
+                {listening ? '🛑 Stop Listening' : '🎤 Talk to your Data'}
               </button>
               <p className="subtitle">Ask questions about policies, claims, or trends</p>
             </div>
           </section>
 
-          {transcript && <div className="transcript"><p><strong>You said:</strong> {transcript}</p></div>}
+          {transcript && (
+            <div className="transcript">
+              <p><strong>You Said:</strong> {transcript.charAt(0).toUpperCase() + transcript.slice(1)}</p>
+            </div>
+          )}
           {sql && <div className="sql-box"><strong>Generated SQL:</strong><div><code>{sql}</code></div></div>}
           {loading && <div className="loader"></div>}
 
           {manualQueryAttempted && !loading && (
-            <div>
-              <h2 className="results-heading">Manual Query Results</h2>
-              {manualQueryResults.length > 0 ? (
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      {manualQueryColumns.map((key) => <th key={key}>{key}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualQueryResults.map((row, i) => (
-                      <tr key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <td key={j}>
-                            {typeof val === 'number'
-                              ? val.toLocaleString('en-US')
-                              : (typeof val === 'string' && val.includes('T'))
-                                ? val.slice(0, 10)
-                                : val}
-                          </td>
-                        ))}
-                      </tr>
+            manualQueryResults.length > 0 ? (
+              <table className="result-table">
+                <thead>
+                  <tr>
+                    {columnOrder.map((col) => (
+                      <th key={col}>{columnDisplayNames[col] || col}</th>
                     ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="no-data-found">No data found matching your query.</div>
-              )}
-            </div>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualQueryResults.map((row, i) => (
+                    <tr key={i}>
+                      {columnOrder.map((key, j) => {
+                        const val = row[key];
+                        return (
+                          <td key={j}>
+                            {(key === 'limit' || key === 'gross_premium') && !isNaN(val)
+                              ? `$${Number(val).toLocaleString('en-US', {
+                                  minimumFractionDigits: key === 'gross_premium' ? 2 : 0,
+                                  maximumFractionDigits: key === 'gross_premium' ? 2 : 0
+                                })}`
+                              : typeof val === 'number'
+                                ? val.toLocaleString('en-US')
+                                : (typeof val === 'string' && val.includes('T'))
+                                  ? val.slice(0, 10)
+                                  : val}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="no-data-found">No data found matching your query.</div>
+            )
           )}
 
-          {filterAttempted && !loading && (
+          {filterAttempted && !loading && !manualQueryAttempted && (
             <div>
               <h2 className="results-heading">Filtered Query Results</h2>
               {filterResults.length > 0 ? (
                 <table className="result-table">
                   <thead>
                     <tr>
-                      {filterResultsColumns.map((key) => <th key={key}>{key}</th>)}
+                      {columnOrder.map((col) => (
+                        <th key={col}>{columnDisplayNames[col] || col}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filterResults.map((row, i) => (
                       <tr key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <td key={j}>
-                            {typeof val === 'number'
-                              ? val.toLocaleString('en-US')
-                              : (typeof val === 'string' && val.includes('T'))
-                                ? val.slice(0, 10)
-                                : val}
-                          </td>
-                        ))}
+                        {columnOrder.map((key, j) => {
+                          const val = row[key] ?? '';
+                          return (
+                            <td key={j}>
+                              {(key === 'limit' || key === 'gross_premium') && !isNaN(val) && val !== ''
+                                ? `$${Number(val).toLocaleString('en-US', {
+                                    minimumFractionDigits: key === 'gross_premium' ? 2 : 0,
+                                    maximumFractionDigits: key === 'gross_premium' ? 2 : 0
+                                  })}`
+                                : typeof val === 'number'
+                                  ? val.toLocaleString('en-US')
+                                  : (typeof val === 'string' && val.includes('T'))
+                                    ? val.slice(0, 10)
+                                    : val}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>

@@ -14,13 +14,13 @@ const FilterSidebar = ({ filters, onChange, onApplyFilters, onManualQuerySubmit 
 
       {/* Manual Query */}
       <div className="filter-section">
-        <h3>Manual Query</h3>
+        <h3>Ask About Your Data</h3>
         <input
           type="text"
           name="manualQuery"
           value={filters.manualQuery}
           onChange={handleInputChange}
-          placeholder="Query: Type your query here"
+          placeholder="Type your query here"
         />
         <button className="submit-query-btn" onClick={onManualQuerySubmit}>
           Submit Query

@@ -458,7 +458,5 @@ def get_kpis():
         return jsonify({"error": "Failed to fetch KPIs", "details": str(e)}), 500
 
 
-
-
 if __name__ == "__main__":
     app.run(debug=True)
