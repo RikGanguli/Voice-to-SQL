@@ -1,0 +1,20 @@
+.result-table {
+  width: 100%;
+  max-width: 1000px;
+  margin: 2rem auto;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.result-table th, .result-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.result-table tr:hover {
+  background: #f9fafb;
+}

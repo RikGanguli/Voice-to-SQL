@@ -1,0 +1,43 @@
+.kpi-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;  /* Slightly reduce gap */
+  justify-content: center;
+  margin-bottom: 2rem;  /* Reduce margin */
+}
+
+.kpi-card {
+  background: white;
+  padding: 0.75rem 1rem; /* Compact padding for better fit */
+  border-radius: 10px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+  width: 160px; /* Fixed width for consistency */
+  height: 100px; /* Fixed height to align vertically */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.3s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);  /* Softer hover effect */
+}
+
+.kpi-card h2 {
+  margin: 0;
+  color: #6366f1;
+  font-size: 1.25rem; /* Slightly smaller, fits better */
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.kpi-card p {
+  margin: 0.25rem 0 0;
+  font-weight: 500;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  word-wrap: break-word;
+}

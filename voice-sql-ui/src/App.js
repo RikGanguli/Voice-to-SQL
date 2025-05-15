@@ -1,46 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import FilterSidebar from './components/FilterSidebar';
+import KPICards from './components/KPICards';
+import VoiceInput from './components/VoiceInput';
+import SQLBox from './components/SQLBox';
+import Loader from './components/Loader';
+import NoData from './components/NoData';
+import ResultTable from './components/ResultTable';
 import Footer from './components/Footer';
 import './App.css';
 
-const KPICards = () => {
-  const [kpis, setKpis] = useState(null);
-
-  useEffect(() => {
-    const fetchKPIs = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/kpis');
-        setKpis(response.data);
-      } catch (error) {
-        console.error("Failed to fetch KPIs:", error);
-      }
-    };
-    fetchKPIs();
-  }, []);
-
-  if (!kpis) return <p>Loading KPIs...</p>;
-
-  const kpiItems = [
-    { label: 'Total Policies', value: kpis.totalPolicies },
-    { label: 'Total Gross Premium', value: kpis.totalGrossPremium },
-    { label: 'Average Policy Limit', value: kpis.avgPolicyLimit },
-    { label: 'Policies Issued This Month', value: kpis.policiesThisMonth },
-    { label: 'Most Common Transaction Type', value: kpis.commonTransactionType },
-    { label: 'Top Insured State', value: kpis.topInsuredState },
-  ];
-
-  return (
-    <div className="kpi-container">
-      {kpiItems.map((kpi, index) => (
-        <div key={index} className="kpi-card">
-          <h2>{kpi.value}</h2>
-          <p>{kpi.label}</p>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const App = () => {
   const [transcript, setTranscript] = useState('');
@@ -222,60 +191,24 @@ const App = () => {
 
           <KPICards />
 
-          <section className="voice-section">
-            <div className="voice-content">
-              {/* <h2 className="gradient-text">Talk to your data</h2> */}
-              <button className={`listen-button ${listening ? 'listening' : ''}`} onClick={toggleListening}>
-                {listening ? '🛑 Stop Listening' : '🎤 Talk to your Data'}
-              </button>
-              <p className="subtitle">Ask questions about policies, claims, or trends</p>
-            </div>
-          </section>
+          <VoiceInput
+            listening={listening}
+            toggleListening={toggleListening}
+            transcript={transcript}
+          />
 
-          {transcript && (
-            <div className="transcript">
-              <p><strong>You Said:</strong> {transcript.charAt(0).toUpperCase() + transcript.slice(1)}</p>
-            </div>
-          )}
-          {sql && <div className="sql-box"><strong>Generated SQL:</strong><div><code>{sql}</code></div></div>}
-          {loading && <div className="loader"></div>}
+          <SQLBox sql={sql} />
+          {loading && <Loader />}
 
           {manualQueryAttempted && !loading && (
             manualQueryResults.length > 0 ? (
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    {columnOrder.map((col) => (
-                      <th key={col}>{columnDisplayNames[col] || col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {manualQueryResults.map((row, i) => (
-                    <tr key={i}>
-                      {columnOrder.map((key, j) => {
-                        const val = row[key];
-                        return (
-                          <td key={j}>
-                            {(key === 'limit' || key === 'gross_premium') && !isNaN(val)
-                              ? `$${Number(val).toLocaleString('en-US', {
-                                  minimumFractionDigits: key === 'gross_premium' ? 2 : 0,
-                                  maximumFractionDigits: key === 'gross_premium' ? 2 : 0
-                                })}`
-                              : typeof val === 'number'
-                                ? val.toLocaleString('en-US')
-                                : (typeof val === 'string' && val.includes('T'))
-                                  ? val.slice(0, 10)
-                                  : val}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ResultTable
+                data={manualQueryResults}
+                columnOrder={columnOrder}
+                columnDisplayNames={columnDisplayNames}
+              />
             ) : (
-              <div className="no-data-found">No data found matching your query.</div>
+              <NoData message="No data found matching your query." />
             )
           )}
 
@@ -283,44 +216,17 @@ const App = () => {
             <div>
               <h2 className="results-heading">Filtered Query Results</h2>
               {filterResults.length > 0 ? (
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      {columnOrder.map((col) => (
-                        <th key={col}>{columnDisplayNames[col] || col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filterResults.map((row, i) => (
-                      <tr key={i}>
-                        {columnOrder.map((key, j) => {
-                          const val = row[key] ?? '';
-                          return (
-                            <td key={j}>
-                              {(key === 'limit' || key === 'gross_premium') && !isNaN(val) && val !== ''
-                                ? `$${Number(val).toLocaleString('en-US', {
-                                    minimumFractionDigits: key === 'gross_premium' ? 2 : 0,
-                                    maximumFractionDigits: key === 'gross_premium' ? 2 : 0
-                                  })}`
-                                : typeof val === 'number'
-                                  ? val.toLocaleString('en-US')
-                                  : (typeof val === 'string' && val.includes('T'))
-                                    ? val.slice(0, 10)
-                                    : val}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ResultTable
+                  data={filterResults}
+                  columnOrder={columnOrder}
+                  columnDisplayNames={columnDisplayNames}
+                />
               ) : (
-                <div className="no-data-found">No data found matching your filters.</div>
+                <NoData message="No data found matching your filters." />
               )}
             </div>
           )}
-
+          
         </main>
 
         <FilterSidebar
