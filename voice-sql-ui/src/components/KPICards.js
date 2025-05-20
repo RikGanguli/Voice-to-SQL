@@ -1,38 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
 import './KPICards.css';
 
 const KPICards = () => {
-  const [kpis, setKpis] = useState(null);
-
-  useEffect(() => {
-    const fetchKPIs = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/kpis');
-        setKpis(response.data);
-      } catch (error) {
-        console.error("Failed to fetch KPIs:", error);
-      }
-    };
-    fetchKPIs();
-  }, []);
-
-  if (!kpis) return <p>Loading KPIs...</p>;
-
+  // Hardcoded KPI values with types for styling
   const kpiItems = [
-    { label: 'Total Policies', value: kpis.totalPolicies },
-    { label: 'Total Gross Premium', value: kpis.totalGrossPremium },
-    { label: 'Average Policy Limit', value: kpis.avgPolicyLimit },
-    { label: 'Policies Issued This Month', value: kpis.policiesThisMonth },
-    { label: 'Most Common Transaction Type', value: kpis.commonTransactionType },
-    { label: 'Top Insured State', value: kpis.topInsuredState },
+    { label: 'GWP Issued Today', value: 251234, type: 'gwp' },
+    { label: 'GWP MTD', value: 2144578.32, type: 'gwp' },
+    { label: 'GWP YTD', value: 5638921.64, type: 'gwp' },
+    { label: 'Total Incurred', value: 2000000, type: 'totals' },
+    { label: 'Open Claims Today', value: 65873.42, type: 'claims' },
+    { label: 'Open Claims MTD', value: 214987.1, type: 'claims' },
+    { label: 'Open Claims YTD', value: 1274589.99, type: 'claims' },
   ];
+
+  // const formatCurrency = (amount, type) => {
+  //   const isGWP = type === 'gwp';
+
+  //   // Round to 2 decimals for claims/totals, no decimals for GWP
+  //   const precision = isGWP ? 0 : 2;
+  //   const num = Number(amount);
+
+  //   if (num >= 1_000_000) {
+  //     const value = (num / 1_000_000).toFixed(precision);
+  //     return `$${value}M`;
+  //   } else if (num >= 1_000) {
+  //     const value = (num / 1_000).toFixed(precision);
+  //     return `$${value}K`;
+  //   } else {
+  //     return `$${num.toFixed(precision)}`;
+  //   }
+  // };
+
+  const formatCurrency = (amount, type) => {
+  const num = Number(amount);
+
+  if (num >= 1_000_000) {
+    const value = (num / 1_000_000).toFixed(2);
+    return `$${value}M`;
+  } else if (num >= 1_000) {
+    const value = (num / 1_000).toFixed(2);
+    return `$${value}K`;
+  } else {
+    const precision = type === 'gwp' ? 0 : 2;
+    return `$${num.toFixed(precision)}`;
+  }
+};
+
 
   return (
     <div className="kpi-container">
       {kpiItems.map((kpi, index) => (
-        <div key={index} className="kpi-card">
-          <h2>{kpi.value}</h2>
+        <div key={index} className={`kpi-card ${kpi.type}`}>
+          <h2>{formatCurrency(kpi.value, kpi.type)}</h2>
           <p>{kpi.label}</p>
         </div>
       ))}

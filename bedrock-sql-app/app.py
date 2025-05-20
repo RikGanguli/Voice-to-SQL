@@ -5,6 +5,7 @@ import psycopg2
 import os
 import json
 import re
+from decimal import Decimal
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 import logging
@@ -144,7 +145,7 @@ Only return the SQL query. Do not explain anything.
 The table is called 'insurance_policies' and has the following columns:
 - policy_number (TEXT)
 - effective_date (DATE; when the policy was issued)
-- transaction_type (TEXT; e.g. New Business, Endorsement)
+- transaction_type (TEXT; e.g. New, Endorsement)
 - insured_state (TEXT; two-letter US state abbreviation)
 - coverage (TEXT)
 - limit (NUMERIC; represents the coverage limit in dollars)
@@ -160,7 +161,7 @@ Use proper PostgreSQL syntax and avoid line breaks or comments.
 
 If the question mentions "no filter" for a column, do not add any WHERE clause for that column.
 
-When the question asks for records "from" a date, generate a condition like "effective_date >= 'YYYY-MM-DD'" to include all records from that date onwards.
+Do not invent or assume transaction_type values. Only use known values: New, Renewal, Policy, Endorsement, Reinstate, Cancellation, Audit, Cancel.
 
 Question: {user_question}
 Assistant:
@@ -216,14 +217,22 @@ def ask():
             raise ValueError("No SQL query found in response.")
 
         sql_section = response_body[sql_start:]
-        sql_only = re.split(r'[\"`\n]*stop_reason', sql_section)[0].strip()
+
+        # Stop at the first semicolon OR double newline OR 'stop_reason'
+        sql_only = re.split(r'(;|\n\n|stop_reason)', sql_section)[0].strip()
+
+        # Remove trailing commentary after FROM/GROUP BY queries
+        sql_only = re.split(r'(?:This|Note|Explanation|The result|You can use)', sql_only, flags=re.IGNORECASE)[0].strip()
+
+        # Clean escaped characters
         sql = sql_only.replace('\\n', ' ').replace('\\t', ' ').strip('",` ')
+
         # Quote reserved keywords like 'limit'
-        # Smart replacement of limit used as a column (no lookbehind)
+        # Quote 'limit' if used as a column but not in LIMIT clause
         sql = re.sub(
-            r'\b(SELECT|WHERE|AND|OR|ON|BY)\s+(limit)\b',
-            lambda m: f"{m.group(1)} \"{m.group(2)}\"",
-            sql,
+            r'(?<!\bLIMIT\s)\blimit\b(?!\s*\d)', 
+            '"limit"', 
+            sql, 
             flags=re.IGNORECASE
         )
 
@@ -250,6 +259,19 @@ def ask():
         sql = sql_clean
         print(f"[Generated SQL]\n{sql}")
 
+        # Handle EXTRACT(YEAR FROM effective_date) = 2024 pattern
+        extract_year_match = re.search(r"extract\s*\(\s*year\s+from\s+effective_date\s*\)\s*=\s*(\d{4})", sql, re.IGNORECASE)
+        if extract_year_match:
+            year = int(extract_year_match.group(1))
+            sql = re.sub(
+                r"extract\s*\(\s*year\s+from\s+effective_date\s*\)\s*=\s*\d{4}",
+                f"effective_date >= '{year}-01-01' AND effective_date < '{year + 1}-01-01'",
+                sql,
+                flags=re.IGNORECASE
+            )
+            print(f"[Post-processed SQL after EXTRACT(YEAR) patch]\n{sql}")
+
+
     except Exception as e:
         print(f"[Claude API Error] {str(e)}")
         import traceback
@@ -265,15 +287,24 @@ def ask():
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description]
         result = []
-        for row in rows:
-            row_dict = dict(zip(columns, row))
 
-            # ✅ Safe check if effective_date exists and is not None
-            if 'effective_date' in row_dict and isinstance(row_dict['effective_date'], (datetime, date)):
-                if row_dict['effective_date'] is not None:
-                    row_dict['effective_date'] = row_dict['effective_date'].strftime('%Y-%m-%d')
+        # ✅ CASE 1: Scalar result (e.g., SELECT COUNT(*), SUM(...), AVG(...))
+        if len(columns) == 1 and len(rows) == 1:
+            result.append({columns[0]: rows[0][0]})
 
-            result.append(row_dict)
+        # ✅ CASE 2: Grouped summary (e.g., SELECT field, COUNT(*) ... LIMIT 1)
+        elif len(columns) == 2 and len(rows) == 1:
+            result.append(dict(zip(columns, rows[0])))
+
+        # ✅ CASE 3: Normal full row output
+        else:
+            for row in rows:
+                row_dict = dict(zip(columns, row))
+                if 'effective_date' in row_dict and isinstance(row_dict['effective_date'], (datetime, date)):
+                    if row_dict['effective_date'] is not None:
+                        row_dict['effective_date'] = row_dict['effective_date'].strftime('%Y-%m-%d')
+                result.append(row_dict)
+
 
         print(f"[SQL Query Result] Rows Fetched: {len(result)}")
         cur.close()
@@ -284,8 +315,49 @@ def ask():
         import traceback
         traceback.print_exc()
         return jsonify({"error": "PostgreSQL query failed", "sql": sql, "details": str(e)}), 500
+    
+    # Step 4: Determine Chart Type (only if user asked for it)
+    chart_type = None
+    question_lower = question.lower()
 
-    return jsonify({"sql": sql, "result": result})
+    if any(kw in question_lower for kw in ['chart', 'graph', 'visualize', 'plot', 'distribution', 'trend', 'compare', 'share']):
+        if 'line chart' in question_lower or 'trend' in question_lower or 'over time' in question_lower or 'time series' in question_lower:
+            chart_type = 'line'
+        elif 'bar chart' in question_lower or 'compare' in question_lower or 'comparison' in question_lower:
+            chart_type = 'bar'
+        elif 'pie chart' in question_lower or 'distribution' in question_lower or 'share' in question_lower or 'proportion' in question_lower:
+            chart_type = 'pie'
+        else:
+            # fallback default
+            chart_type = 'bar'
+
+    print(f"[Determined Chart Type] {chart_type}")
+
+    # Step 5: Infer xField & yField (only if chartType is needed)
+    x_field = None
+    y_field = None
+
+    if chart_type and result:
+        result_keys = result[0].keys()
+        print(f"[Result Keys] {result_keys}")
+
+        numeric_fields = [k for k in result_keys if isinstance(result[0][k], (int, float, Decimal))]
+        string_fields = [k for k in result_keys if isinstance(result[0][k], str)]
+
+        y_field = numeric_fields[0] if numeric_fields else None
+        x_field = string_fields[0] if string_fields else None
+
+        print(f"[Inferred xField: {x_field}, yField: {y_field}]")
+
+    return jsonify({
+        "sql": sql,
+        "result": result,
+        "count": len(result), 
+        "chartType": chart_type,
+        "xField": x_field,
+        "yField": y_field
+    })
+
 
 
 @app.route("/filters", methods=["POST"])
@@ -394,7 +466,11 @@ def filters():
         print("SQL Error:", str(e))
         return jsonify({"error": "PostgreSQL query failed", "sql": sql, "details": str(e)}), 500
 
-    return jsonify({"sql": sql, "result": result})
+    return jsonify({
+        "sql": sql, 
+        "result": result,
+        "count": len(result)
+    })
 
 
 @app.route("/kpis", methods=["GET"])
@@ -415,12 +491,12 @@ def get_kpis():
         cur.execute('SELECT COALESCE(ROUND(AVG("limit"), 2), 0) FROM insurance_policies;')
         avg_policy_limit = cur.fetchone()[0]
 
-        # 4. Policies Issued This Month
+        # 4. Policies Issued This Year
         cur.execute("""
             SELECT COUNT(*) FROM insurance_policies 
-            WHERE DATE_TRUNC('month', effective_date) = DATE_TRUNC('month', CURRENT_DATE);
+            WHERE EXTRACT(YEAR FROM effective_date) = EXTRACT(YEAR FROM CURRENT_DATE);
         """)
-        policies_this_month = cur.fetchone()[0]
+        policies_this_year = cur.fetchone()[0]
 
         # 5. Most Common Transaction Type
         cur.execute("""
@@ -448,7 +524,7 @@ def get_kpis():
             "totalPolicies": total_policies,
             "totalGrossPremium": f"${total_gross_premium:,.2f}",
             "avgPolicyLimit": f"${avg_policy_limit:,.2f}",
-            "policiesThisMonth": policies_this_month,
+            "policiesThisYear": policies_this_year,
             "commonTransactionType": common_transaction_type,
             "topInsuredState": top_insured_state
         })

@@ -8,6 +8,11 @@ import Loader from './components/Loader';
 import NoData from './components/NoData';
 import ResultTable from './components/ResultTable';
 import Footer from './components/Footer';
+import { formatForChart } from './utils/formatData';
+import ChartToggleButtons from './components/ChartToggleButtons';
+
+import ChartWrapper from './components/Charts/ChartWrapper';
+
 import './App.css';
 
 
@@ -30,6 +35,8 @@ const App = () => {
     premiumMax: ''
   });
 
+  
+
   const [manualQueryResults, setManualQueryResults] = useState([]);
   const [filterResults, setFilterResults] = useState([]);
   const [manualQueryAttempted, setManualQueryAttempted] = useState(false);
@@ -38,6 +45,17 @@ const App = () => {
   const recognitionRef = useRef(null);
   const stopRequestedRef = useRef(false);
   const listeningRef = useRef(false); // ✅ New ref to track listening state
+  const [chartType, setChartType] = useState('pie');
+  const [xField, setXField] = useState('');
+  const [yField, setYField] = useState('');
+  const [recordCount, setRecordCount] = useState(null);
+
+
+  const chartData = (xField && yField && manualQueryResults.length > 0)
+  ? formatForChart(manualQueryResults, xField, yField)
+  : null;
+
+  
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -115,6 +133,10 @@ const App = () => {
       const data = response.data;
       setSql(data.sql || '');
       setManualQueryResults(data.result || []);
+      setRecordCount(data.count || 0);  // 👈 Add this
+      setChartType(data.chartType || 'pie');  // ✅ Add this
+      setXField(data.xField || '');
+      setYField(data.yField || '');
     } catch (error) {
       console.error(error);
       setManualQueryResults([]);
@@ -142,6 +164,7 @@ const App = () => {
     const data = response.data;
     setSql(data.sql || '');
     setFilterResults(data.result || []);
+    setRecordCount(data.count || 0);  // 👈 Add this
   } catch (error) {
     console.error(error);
     setFilterResults([]);
@@ -176,8 +199,12 @@ const App = () => {
       insured_state: 'Insured State',
       coverage: 'Coverage',
       limit: 'Policy Limit ($)',
-      gross_premium: 'Gross Premium ($)'
+      gross_premium: 'Gross Premium ($)',
+      total_premium: 'Total Gross Premium',
+      total_gross_premium: 'Total Gross Premium'
     };
+
+    
 
 
   return (
@@ -186,7 +213,7 @@ const App = () => {
         <main className="main-content">
           <header className="header">
             <img src="/coaction-logo.jpg" alt="Coaction Specialty" className="logo" />
-            <h1 className="header-title">Policy Insights</h1>
+            <h1 className="header-title">Data Hub</h1>
           </header>
 
           <KPICards />
@@ -200,15 +227,30 @@ const App = () => {
           <SQLBox sql={sql} />
           {loading && <Loader />}
 
-          {manualQueryAttempted && !loading && (
+          {/* <ChartToggleButtons setChartType={setChartType} currentType={chartType} /> */}
+
+          {chartData && chartData.length > 0 && (
+            <ChartWrapper 
+              chartType={chartType} 
+              data={manualQueryResults} 
+              xField={xField} 
+              yField={yField} 
+            />
+          )}
+
+
+          {manualQueryAttempted && !loading && chartData === null && (
             manualQueryResults.length > 0 ? (
-              <ResultTable
-                data={manualQueryResults}
-                columnOrder={columnOrder}
-                columnDisplayNames={columnDisplayNames}
-              />
+              <>
+                <p className="record-count">Found {recordCount} record{recordCount !== 1 ? 's' : ''}</p>
+                <ResultTable
+                  data={manualQueryResults}
+                  columnOrder={columnOrder}
+                  columnDisplayNames={columnDisplayNames}
+                />
+              </>
             ) : (
-              <NoData message="No data found matching your query." />
+              sql && <NoData message="No data found matching your query." />
             )
           )}
 
@@ -216,11 +258,14 @@ const App = () => {
             <div>
               <h2 className="results-heading">Filtered Query Results</h2>
               {filterResults.length > 0 ? (
-                <ResultTable
-                  data={filterResults}
-                  columnOrder={columnOrder}
-                  columnDisplayNames={columnDisplayNames}
-                />
+                <>
+                  <p className="record-count">Found {recordCount} record{recordCount !== 1 ? 's' : ''}</p>
+                  <ResultTable
+                    data={filterResults}
+                    columnOrder={columnOrder}
+                    columnDisplayNames={columnDisplayNames}
+                  />
+                </>
               ) : (
                 <NoData message="No data found matching your filters." />
               )}
@@ -237,7 +282,7 @@ const App = () => {
         />
       </div>
 
-      <Footer />
+      {/* <Footer /> */}
     </>
   );
 };
