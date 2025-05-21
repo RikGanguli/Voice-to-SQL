@@ -19,3 +19,15 @@ canvas {
   max-width: 100%;
   object-fit: contain;
 }
+
+.chart-title {
+  margin-top: 0.75rem;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+  color: #374151; /* slate-700 */
+}
+
+.chart-wrapper {
+  margin-bottom: 2rem;
+}

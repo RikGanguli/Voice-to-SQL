@@ -97,6 +97,31 @@ const App = () => {
     recognitionRef.current = recognition;
   }, []);
 
+  const handleReset = () => {
+    setTranscript('');
+    setSql('');
+    setChartType(null);
+    setXField('');
+    setYField('');
+    setManualQueryResults([]);
+    setFilterResults([]);
+    setManualQueryAttempted(false);
+    setFilterAttempted(false);
+    setFilters({
+      manualQuery: '',
+      effectiveFrom: '',
+      effectiveTo: '',
+      transactionType: '',
+      insuredState: '',
+      coverage: '',
+      limitMin: '',
+      limitMax: '',
+      premiumMin: '',
+      premiumMax: ''
+    });
+  };
+
+
   const toggleListening = () => {
     if (!recognitionRef.current) return;
 
@@ -204,13 +229,14 @@ const App = () => {
       total_gross_premium: 'Total Gross Premium'
     };
 
-    
-
-
   return (
     <>
       <div className="app-layout">
         <main className="main-content">
+          <button className="reset-button" onClick={handleReset}>
+            ⟳
+          </button>
+
           <header className="header">
             <img src="/coaction-logo.jpg" alt="Coaction Specialty" className="logo" />
             <h1 className="header-title">Data Hub</h1>
@@ -234,7 +260,8 @@ const App = () => {
               chartType={chartType} 
               data={manualQueryResults} 
               xField={xField} 
-              yField={yField} 
+              yField={yField}
+              userQuestion={transcript || filters.manualQuery} 
             />
           )}
 
