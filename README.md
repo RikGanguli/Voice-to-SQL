@@ -39,8 +39,8 @@ An intelligent dashboard that converts natural language or voice queries into re
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/voice-to-sql-dashboard.git
-cd voice-to-sql-dashboard
+git clone https://github.com/rikganguli/Voice-to-SQL.git
+cd Voice-to-SQL
 ```
 
 ### 2. Setup Frontend
