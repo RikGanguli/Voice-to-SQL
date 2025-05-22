@@ -34,52 +34,115 @@ An intelligent dashboard that converts natural language or voice queries into re
 
 ---
 
-## ⚙️ Setup Instructions
+## 🛠️ Getting Started
 
-### 1. Clone the Repository
+### 🔁 1. Clone the Repository
 
 ```bash
-git clone https://github.com/rikganguli/Voice-to-SQL.git
+git clone https://github.com/RikGanguli/Voice-to-SQL.git
 cd Voice-to-SQL
 ```
 
-### 2. Setup Frontend
+---
 
-```bash
-cd voice-sql-ui
-npm install
-npm start
-```
+## ⚙️ Backend Setup (Flask)
 
-### 3. Setup Backend
+### 📍 Navigate to the backend folder:
 
 ```bash
 cd bedrock-sql-app
-pip install -r requirements.txt
-python app.py
 ```
 
-> Ensure your database connection and AWS credentials are properly configured.
+### 🧪 Create a virtual environment
+
+#### 🔷 On macOS/Linux:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+#### 🟦 On Windows PowerShell:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate
+```
+
+> Make sure Python 3.7+ is installed.
 
 ---
 
-## 🔐 AWS Credentials
-
-This project uses AWS Bedrock (Claude) to generate SQL from natural language.
-
-### Option 1: Use AWS CLI
+### 📦 Install dependencies
 
 ```bash
-aws configure
+pip install -r requirements.txt
 ```
 
-### Option 2: Use Environment Variables
+---
+
+### 🔐 Configure AWS & DB credentials
+
+1. Copy `.env.template` to `.env`:
 
 ```bash
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_DEFAULT_REGION=us-east-1
+cp .env.template .env         # macOS/Linux
+# or
+copy .env.template .env       # Windows PowerShell
 ```
+
+2. Open `.env` and fill in your credentials:
+
+```env
+# AWS Bedrock Configuration
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+AWS_REGION=us-east-1
+
+# PostgreSQL RDS Configuration
+PG_HOST=your-rds-endpoint.rds.amazonaws.com
+PG_PORT=5432
+PG_DATABASE=your-db-name
+PG_USER=your-readonly-user
+PG_PASSWORD=your-password
+```
+
+---
+
+### ▶️ Start the Flask server
+
+```bash
+python app.py
+```
+
+Flask will run at: [http://localhost:5000](http://localhost:5000)
+
+---
+
+## 🌐 Frontend Setup (React)
+
+### 📍 Navigate to the frontend folder:
+
+```bash
+cd Voice-to-SQL/voice-sql-ui
+```
+
+### 📦 Install dependencies
+
+```bash
+npm install
+```
+
+### ▶️ Start the React app
+
+```bash
+npm start
+```
+
+React will run at: [http://localhost:3000](http://localhost:3000)
+
+---
+
 
 ---
 
@@ -94,8 +157,8 @@ export AWS_DEFAULT_REGION=us-east-1
 
 ### 📊 Chart Prompts
 
-- Show the distribution of policies by coverage as a pie chart
-- Compare gross premium by transaction type using a bar chart
+- Show the distribution of policies by coverage
+- Compare gross premium by transaction type
 - Visualize average policy limit by state over time
 
 ### 🔢 Computational Queries
