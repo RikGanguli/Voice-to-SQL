@@ -65,7 +65,7 @@ body {
 }
 
 .reset-button {
-  position: absolute;
+  position: fixed;
   top: 1rem;
   left: 1rem;
   background-color: #f3f4f6;

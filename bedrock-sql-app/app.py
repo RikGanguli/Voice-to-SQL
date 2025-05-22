@@ -161,7 +161,7 @@ Use proper PostgreSQL syntax and avoid line breaks or comments.
 
 If the question mentions "no filter" for a column, do not add any WHERE clause for that column.
 
-Do not invent or assume transaction_type values. Only use known values: New, Renewal, Policy, Endorsement, Reinstate, Cancellation, Audit, Cancel.
+Do not invent or assume transaction_type values. Only use known values: New, Renewal, Endorsement, Reinstate, Cancellation, Audit.
 
 Question: {user_question}
 Assistant:
@@ -379,15 +379,15 @@ def filters():
         values.append(filters_data['effectiveTo'])
 
     if filters_data.get('transactionType'):
-        conditions.append("transaction_type = %s")
+        conditions.append("transaction_type ILIKE %s")
         values.append(filters_data['transactionType'])
 
     if filters_data.get('insuredState'):
-        conditions.append("insured_state = %s")
+        conditions.append("insured_state ILIKE %s")
         values.append(filters_data['insuredState'])
 
     if filters_data.get('coverage'):
-        conditions.append("coverage = %s")
+        conditions.append("coverage ILIKE %s")
         values.append(filters_data['coverage'])
 
     try:

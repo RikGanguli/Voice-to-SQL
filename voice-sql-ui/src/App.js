@@ -7,12 +7,10 @@ import SQLBox from './components/SQLBox';
 import Loader from './components/Loader';
 import NoData from './components/NoData';
 import ResultTable from './components/ResultTable';
-import Footer from './components/Footer';
+// import Footer from './components/Footer';
 import { formatForChart } from './utils/formatData';
-import ChartToggleButtons from './components/ChartToggleButtons';
-
+// import ChartToggleButtons from './components/ChartToggleButtons';
 import ChartWrapper from './components/Charts/ChartWrapper';
-
 import './App.css';
 
 
@@ -49,6 +47,7 @@ const App = () => {
   const [xField, setXField] = useState('');
   const [yField, setYField] = useState('');
   const [recordCount, setRecordCount] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
 
   const chartData = (xField && yField && manualQueryResults.length > 0)
@@ -152,26 +151,39 @@ const App = () => {
     setFilterAttempted(false);
     setFilterResults([]);
     setLoading(true);
+    setErrorMessage('');
 
     try {
       const response = await axios.post('http://localhost:5000/ask', { question: query });
       const data = response.data;
+
+      if (data.error || !data.result) {
+        throw new Error(data.error || 'Unexpected response.');
+      }
+
       setSql(data.sql || '');
       setManualQueryResults(data.result || []);
-      setRecordCount(data.count || 0);  // 👈 Add this
-      setChartType(data.chartType || 'pie');  // ✅ Add this
+      setRecordCount(data.count || 0);
+      setChartType(data.chartType || 'pie');
       setXField(data.xField || '');
       setYField(data.yField || '');
+      setErrorMessage(''); // ✅ Clear previous errors
+
+      // Optional: handle empty results separately
+      if ((data.result || []).length === 0) {
+        setErrorMessage('Sorry! We could not find any relevant data.');
+      }
     } catch (error) {
       console.error(error);
       setManualQueryResults([]);
+      setErrorMessage('Sorry, I couldn’t understand that. Please try asking a different question.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleApplyFilters = async (currentFilters) => {
-  // ✅ Prevent triggering with empty filters
+  // Prevent triggering with empty filters
   const isFilterApplied = Object.values(currentFilters).some(value => value !== '' && value !== null && value !== undefined);
 
   if (!isFilterApplied) {
@@ -239,7 +251,7 @@ const App = () => {
 
           <header className="header">
             <img src="/coaction-logo.jpg" alt="Coaction Specialty" className="logo" />
-            <h1 className="header-title">Data Hub</h1>
+            <h1 className="header-title">CoActionIQ</h1>
           </header>
 
           <KPICards />
@@ -250,7 +262,7 @@ const App = () => {
             transcript={transcript}
           />
 
-          <SQLBox sql={sql} />
+          {/* <SQLBox sql={sql} /> */}
           {loading && <Loader />}
 
           {/* <ChartToggleButtons setChartType={setChartType} currentType={chartType} /> */}
@@ -266,20 +278,23 @@ const App = () => {
           )}
 
 
-          {manualQueryAttempted && !loading && chartData === null && (
-            manualQueryResults.length > 0 ? (
-              <>
-                <p className="record-count">Found {recordCount} record{recordCount !== 1 ? 's' : ''}</p>
-                <ResultTable
-                  data={manualQueryResults}
-                  columnOrder={columnOrder}
-                  columnDisplayNames={columnDisplayNames}
-                />
-              </>
-            ) : (
-              sql && <NoData message="No data found matching your query." />
-            )
+          {manualQueryAttempted && !loading && !chartData && manualQueryResults.length > 0 && (
+            <>
+              <p className="record-count">Found {recordCount} record{recordCount !== 1 ? 's' : ''}</p>
+              <ResultTable
+                data={manualQueryResults}
+                columnOrder={columnOrder}
+                columnDisplayNames={columnDisplayNames}
+              />
+            </>
           )}
+
+          {manualQueryAttempted && !loading && !chartData && manualQueryResults.length === 0 && (sql || errorMessage) && (
+            <NoData message={errorMessage || "Sorry! We could not find any relevant data."} />
+          )}
+
+
+
 
           {filterAttempted && !loading && !manualQueryAttempted && (
             <div>
@@ -294,7 +309,7 @@ const App = () => {
                   />
                 </>
               ) : (
-                <NoData message="No data found matching your filters." />
+                <NoData message="Sorry! We could not find any relevant data." />
               )}
             </div>
           )}

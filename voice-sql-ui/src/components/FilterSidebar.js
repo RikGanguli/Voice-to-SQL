@@ -59,7 +59,7 @@ const FilterSidebar = ({ filters, onChange, onApplyFilters, onManualQuerySubmit 
           name="transactionType"
           value={filters.transactionType}
           onChange={handleInputChange}
-          placeholder="e.g., New Business"
+          placeholder="e.g., Endorsement"
         />
       </div>
 
